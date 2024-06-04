@@ -1,0 +1,1 @@
+export * from '../build/BoostChannel/tact_BoostChannelParent';
