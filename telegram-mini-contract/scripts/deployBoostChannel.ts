@@ -1,9 +1,20 @@
 import { toNano } from '@ton/core';
-import { BoostChannel } from '../wrappers/BoostChannelParent';
+
+import { BoostChannelParent } from '../wrappers/BoostChannelParent';
 import { NetworkProvider } from '@ton/blueprint';
 
 export async function run(provider: NetworkProvider) {
-    const boostChannel = provider.open(await BoostChannel.fromInit(BigInt(Math.floor(Math.random() * 10000))));
+    const boostChannel = provider.open(await BoostChannelParent.fromInit());
+
+    console.log('Deploying BoostChannelParent at ', boostChannel.address);
+    
+    
+    if ((await provider.isContractDeployed(boostChannel.address))) {
+        console.log('Already deployed at', boostChannel.address);
+
+        
+        return;
+    }
 
     await boostChannel.send(
         provider.sender(),
@@ -15,8 +26,8 @@ export async function run(provider: NetworkProvider) {
             queryId: 0n,
         }
     );
-
+    
     await provider.waitForDeploy(boostChannel.address);
-
-    console.log('ID', await boostChannel.getId());
+    console.log('Deployed BoostChannel at', boostChannel.address);
+    
 }

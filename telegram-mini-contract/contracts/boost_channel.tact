@@ -9,6 +9,29 @@ message BoostEventMessage {
     message: String;
 }
 contract BoostChannelParent with Deployable {
+    const MinTonForStorage: Int = ton("0.01"); // enough for 1 KB of storage for 2.5 years
+    deployer: Address;
+
+    init() {
+        self.deployer = sender();
+    }
+
+    // accept incoming TON transfers
+    receive() {
+        dump("funds received");
+    }
+
+    // this will withdraw the entire balance but leave 0.01 for storage rent costs
+    receive("withdraw safe") {
+        require(sender() == self.deployer, "Only deployer is allowed to withdraw");
+        send(SendParameters{
+            to: sender(),
+            bounce: true,
+            value: myBalance() - context().value - self.MinTonForStorage,
+            mode: SendRemainingValue + SendIgnoreErrors
+        });
+    }
+
     get fun childAddress(channelId: Int, itemId: Int): Address {
         return contractAddress(self.getChild(channelId, itemId));
     }
@@ -17,22 +40,19 @@ contract BoostChannelParent with Deployable {
         return initOf BoostChannelChild(myAddress(), channelId, itemId);
     }
 
+    get fun balance(): Int {
+        return myBalance();
+    }
+
     receive(msg: Boost) {
-        dump("BoostChannelParent.receive");
-        
         let receivedTon: Int = context().value;
-        require(receivedTon > ton("1"), "Received TON must be greater than 1 TON");
-        require(receivedTon < ton("100"), "Received TON must be less than 100 TON");
+        require(receivedTon >= ton("1"), "Received TON must be greater than 1 TON");
+        require(receivedTon <= ton("100"), "Received TON must be less than 100 TON");
 
         let child: StateInit = self.getChild(msg.channelId, msg.itemId);
         let additionalTime: Int =  self.calcAddTime(receivedTon);
-
         let childAddress: Address = contractAddress(child);
-        let storageFee: Int = ton("0.01");
-
-        emit(BoostEventMessage {
-            message: "Boosting"
-        }.toCell());
+        let storageFee: Int = ton("0.03");
 
         send(SendParameters {
             to: childAddress,
@@ -47,10 +67,10 @@ contract BoostChannelParent with Deployable {
             code: child.code
         });
 
-        emit(BoostEventMessage {
-            message: "Sended"
-        }.toCell());
-        
+    }
+
+    receive("refund") {
+        dump("refund");
     }
 
     fun calcAddTime(receivedTon: Int): Int {
@@ -70,15 +90,13 @@ contract BoostChannelChild with Deployable {
     itemId: Int as uint256;
     boostEndTime: Int as uint256;
 
-    const minStorageFee: Int = ton("0.01");
+    const minStorageFee: Int = ton("0.03");
 
     init(parent: Address, channelId: Int, itemId: Int) {
         self.parent = parent;
         self.channelId = channelId;
         self.itemId = itemId;
         self.boostEndTime = now(); // Initialize boostEndTime with the current time
-
-        
     }
 
     receive(msg: BoostTask) {
@@ -91,17 +109,19 @@ contract BoostChannelChild with Deployable {
 
         self.boostEndTime += msg.additionalTime;
 
-
         // refund the remaining TON
-        let refund: Int = context().value - self.minStorageFee;
+        let refund: Int = myBalance() - self.minStorageFee;
+        dump("Current balance");
+        dump(myBalance());
+
+        dump("minStorageFee");
+        dump(self.minStorageFee);
+
+        dump("Refund");
+        dump(refund);
         if (refund > 0) {
-            send(SendParameters {
-                to: self.parent,
-                value: refund,
-                mode: 0
-            });
+            self.reply("refund".asComment());
         }
-        
     }
 
     get fun getBoostEndTime(): Int {
@@ -121,5 +141,8 @@ contract BoostChannelChild with Deployable {
     }
     get fun isBoosting(): Bool {
         return self.boostEndTime > now();
+    }
+    get fun balance(): Int {
+        return myBalance();
     }
 }

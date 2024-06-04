@@ -20,10 +20,5 @@
         "ts-jest": "^29.1.3",
         "ts-node": "^10.9.2",
         "typescript": "^5.4.5"
-    },
-    "dependencies": {
-        "@tact-lang/emulator": "^4.2.3",
-        "@tact-lang/ton-abi": "^0.0.3",
-        "ton-abi": "^0.0.2"
     }
 }
